@@ -885,5 +885,5 @@ if __name__ == "__main__":
     loadsettings()
     
     # Start Flask/SocketIO (Blocking, so this must be last method!)
-    print("{0}Server started!\rYou may now connect with a browser at http://127.0.0.1:5000/{1}".format(colors.GREEN, colors.END))
-    socketio.run(app)
+    print("{0}Server starting!\rYou may connect with a browser at port 5000{1}".format(colors.GREEN, colors.END))
+    socketio.run(app, host='0.0.0.0', port=5000)

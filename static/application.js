@@ -223,7 +223,7 @@ $(document).ready(function(){
 	anote_slider    = $('#anotedepth');
 	
     // Connect to SocketIO server
-    socket = io.connect('http://127.0.0.1:5000');
+    socket = io.connect(window.location.protocol + "//" + window.location.host);
 	
 	socket.on('from_server', function(msg) {
         if(msg.cmd == "connected") {
