@@ -1,8 +1,9 @@
-Thanks for checking out the KoboldAI Client!
+Thanks for checking out the KoboldAI Client! Keep up with news and updates on the subreddit:
+https://www.reddit.com/r/KoboldAI/
 
 [ABOUT]
 
-This is a test release of a quickly-assembled front-end for multiple local & remote AI models.
+This is a browser front-end for playing with multiple local & remote AI models.
 The purpose is to provide a smoother, web-based UI experience than the various command-line AI apps.
 I'm pushing this out now that the major quality-of-life fearures have been roughed in (generate,
 undo, edit-by-line, memory, save/load, etc), which means there will probably be bugs.
@@ -21,9 +22,10 @@ to 40,000 characters, and the free account will work with KoboldAI.
 
 [SETUP]
 
-1. Install Python. (https://www.python.org/downloads/)
+1. Install a 64-bit version of Python.
 	(Development was done on 3.7, I have not tested newer versions)
-2. When installing Python make sure "pip" is selected under Optional features.
+	Windows download link: https://www.python.org/ftp/python/3.7.9/python-3.7.9-amd64.exe
+2. When installing Python make sure "Add Python to PATH" is selected.
 	(If pip isn't working, run the installer again and choose Modify to choose Optional features.)
 3. Run install_requirements.bat.
 	(This will install the necessary python packages via pip)
@@ -58,3 +60,23 @@ and your version of CUDA under "Compute Platform" (I linked 10.2) to get the pip
 
 Be aware that when using GPU mode, inference will be MUCH faster but if your GPU doesn't have enough 
 VRAM to load the model it will crash the application.
+
+[IMPORT AI DUNGEON GAMES]
+
+To import your games from AI Dungeon, first grab CuriousNekomimi's AI Dungeon Content Archive Toolkit:
+https://github.com/CuriousNekomimi/AIDCAT
+Follow the video instructions for getting your access_token, and run aidcat.py in command prompt.
+Choose option [1] Download your saved content.
+Choose option [2] Download your adventures.
+Save the JSON file to your computer using the prompt.
+Run KoboldAI, and after connecting to the web GUI, press the Import button at the top.
+Navigate to the JSON file exported from AIDCAT and select it. A prompt will appear in the GUI 
+presenting you with all Adventures scraped from your AI Dungeon account.
+Select an Adventure and click the Accept button.
+
+[HOST GPT-NEO ON GOOGLE COLAB]
+
+If your computer does not have an 8GB GPU to run GPT-Neo locally, you can now run a Google Colab
+notebook hosting a GPT-Neo-2.7B model remotely and connect to it using the KoboldAI client.
+See the instructions on the Colab at the link below:
+https://colab.research.google.com/drive/1uGe9f4ruIQog3RLxfUsoThakvLpHjIkX?usp=sharing

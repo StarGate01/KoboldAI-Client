@@ -1,18 +1,21 @@
 #==================================================================#
 # KoboldAI Client
-# Version: Dev-0.1
+# Version: 1.14.0
 # By: KoboldAIDev
 #==================================================================#
 
+# External packages
 from os import path, getcwd
 import tkinter as tk
 from tkinter import messagebox
 import json
-import torch
+import requests
 
+# KoboldAI
 import fileops
 import gensettings
 from utils import debounce
+import utils
 
 #==================================================================#
 # Variables & Storage
@@ -39,7 +42,8 @@ modellist = [
     ["GPT-2 XL", "gpt2-xl", "16GB"],
     ["InferKit API (requires API key)", "InferKit", ""],
     ["Custom Neo   (eg Neo-horni)", "NeoCustom", ""],
-    ["Custom GPT-2 (eg CloverEdition)", "GPT2Custom", ""]
+    ["Custom GPT-2 (eg CloverEdition)", "GPT2Custom", ""],
+    ["Google Colab", "Colab", ""]
     ]
 
 # Variables
@@ -61,28 +65,29 @@ class vars:
     authornote  = ""
     andepth     = 3      # How far back in history to append author's note
     actions     = []
+    worldinfo   = []
+    deletewi    = -1     # Temporary storage for index to delete
     mode        = "play" # Whether the interface is in play, memory, or edit mode
     editln      = 0      # Which line was last selected in Edit Mode
     url         = "https://api.inferkit.com/v1/models/standard/generate" # InferKit API URL
+    colaburl    = ""     # Ngrok url for Google Colab mode
     apikey      = ""     # API key to use for InferKit API calls
     savedir     = getcwd()+"\stories"
     hascuda     = False  # Whether torch has detected CUDA on the system
     usegpu      = False  # Whether to launch pipeline with GPU support
     custmodpth  = ""     # Filesystem location of custom model to run
+    formatoptns = {}     # Container for state of formatting options
+    importnum   = -1     # Selection on import popup list
+    importjs    = {}     # Temporary storage for import data
 
 #==================================================================#
 # Function to get model selection at startup
 #==================================================================#
 def getModelSelection():
-    print("    #   Model                   {0}\n    ==================================="
-        .format("VRAM" if vars.hascuda else "    "))
-    
+    print("    #   Model                           V/RAM\n    =========================================")
     i = 1
     for m in modellist:
-        if(vars.hascuda):
-            print("    {0} - {1}\t\t{2}".format(i, m[0].ljust(15), m[2]))
-        else:
-            print("    {0} - {1}".format(i, m[0]))
+        print("    {0} - {1}\t\t{2}".format("{:<2}".format(i), m[0].ljust(15), m[2]))
         i += 1
     print(" ");
     modelsel = 0
@@ -113,36 +118,39 @@ def getModelSelection():
 # Startup
 #==================================================================#
 
-# Test for GPU support
-print("{0}Looking for GPU support...{1}".format(colors.PURPLE, colors.END), end="")
-vars.hascuda = torch.cuda.is_available()
-if(vars.hascuda):
-    print("{0}FOUND!{1}".format(colors.GREEN, colors.END))
-else:
-    print("{0}NOT FOUND!{1}".format(colors.YELLOW, colors.END))
-
 # Select a model to run
 print("{0}Welcome to the KoboldAI Client!\nSelect an AI model to continue:{1}\n".format(colors.CYAN, colors.END))
 getModelSelection()
 
 # If transformers model was selected & GPU available, ask to use CPU or GPU
-if(vars.model != "InferKit" and vars.hascuda):
+if(not vars.model in ["InferKit", "Colab"]):
+    # Test for GPU support
+    import torch
+    print("{0}Looking for GPU support...{1}".format(colors.PURPLE, colors.END), end="")
+    vars.hascuda = torch.cuda.is_available()
+    if(vars.hascuda):
+        print("{0}FOUND!{1}".format(colors.GREEN, colors.END))
+    else:
+        print("{0}NOT FOUND!{1}".format(colors.YELLOW, colors.END))
+    
     print("{0}Use GPU or CPU for generation?:  (Default GPU){1}\n".format(colors.CYAN, colors.END))
-    print("    1 - GPU\n    2 - CPU\n")
-    genselected = False
-    while(genselected == False):
-        genselect = input("Mode> ")
-        if(genselect == ""):
-            vars.usegpu = True
-            genselected = True
-        elif(genselect.isnumeric() and int(genselect) == 1):
-            vars.usegpu = True
-            genselected = True
-        elif(genselect.isnumeric() and int(genselect) == 2):
-            vars.usegpu = False
-            genselected = True
-        else:
-            print("{0}Please enter a valid selection.{1}".format(colors.RED, colors.END))
+    
+    if(vars.hascuda):    
+        print("    1 - GPU\n    2 - CPU\n")
+        genselected = False
+        while(genselected == False):
+            genselect = input("Mode> ")
+            if(genselect == ""):
+                vars.usegpu = True
+                genselected = True
+            elif(genselect.isnumeric() and int(genselect) == 1):
+                vars.usegpu = True
+                genselected = True
+            elif(genselect.isnumeric() and int(genselect) == 2):
+                vars.usegpu = False
+                genselected = True
+            else:
+                print("{0}Please enter a valid selection.{1}".format(colors.RED, colors.END))
 
 # Ask for API key if InferKit was selected
 if(vars.model == "InferKit"):
@@ -153,7 +161,8 @@ if(vars.model == "InferKit"):
         # Write API key to file
         file = open("client.settings", "w")
         try:
-            file.write("{\"apikey\": \""+vars.apikey+"\"}")
+            js = {"apikey": vars.apikey}
+            file.write(json.dumps(js, indent=3))
         finally:
             file.close()
     else:
@@ -173,9 +182,14 @@ if(vars.model == "InferKit"):
             # Write API key to file
             file = open("client.settings", "w")
             try:
-                file.write(json.dumps(js))
+                file.write(json.dumps(js, indent=3))
             finally:
                 file.close()
+
+# Ask for ngrok url if Google Colab was selected
+if(vars.model == "Colab"):
+    print("{0}Please enter the ngrok.io URL displayed in Google Colab:{1}\n".format(colors.CYAN, colors.END))
+    vars.colaburl = input("URL> ") + "/request"
 
 # Set logging level to reduce chatter from Flask
 import logging
@@ -192,7 +206,7 @@ socketio = SocketIO(app)
 print("{0}OK!{1}".format(colors.GREEN, colors.END))
 
 # Start transformers and create pipeline
-if(vars.model != "InferKit"):
+if(not vars.model in ["InferKit", "Colab"]):
     if(not vars.noai):
         print("{0}Initializing transformers, please wait...{1}".format(colors.PURPLE, colors.END))
         from transformers import pipeline, GPT2Tokenizer, GPT2LMHeadModel, GPTNeoForCausalLM
@@ -226,8 +240,10 @@ if(vars.model != "InferKit"):
         
         print("{0}OK! {1} pipeline created!{2}".format(colors.GREEN, vars.model, colors.END))
 else:
-    # Import requests library for HTTPS calls
-    import requests
+    # If we're running Colab, we still need a tokenizer.
+    if(vars.model == "Colab"):
+        from transformers import GPT2Tokenizer
+        tokenizer = GPT2Tokenizer.from_pretrained("EleutherAI/gpt-neo-2.7B")
 
 # Set up Flask routes
 @app.route('/')
@@ -248,11 +264,14 @@ def do_connect():
         setStartState()
         sendsettings()
         refresh_settings()
+        sendwi()
+        vars.mode = "play"
     else:
         # Game in session, send current game data and ready state to browser
         refresh_story()
         sendsettings()
         refresh_settings()
+        sendwi()
         if(vars.mode == "play"):
             if(not vars.aibusy):
                 emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
@@ -262,6 +281,8 @@ def do_connect():
             emit('from_server', {'cmd': 'editmode', 'data': 'true'})
         elif(vars.mode == "memory"):
             emit('from_server', {'cmd': 'memmode', 'data': 'true'})
+        elif(vars.mode == "wi"):
+            emit('from_server', {'cmd': 'wimode', 'data': 'true'})
 
 #==================================================================#
 # Event triggered when browser SocketIO sends data to the server
@@ -315,6 +336,8 @@ def get_message(msg):
         saveRequest()
     elif(msg['cmd'] == 'load'):
         loadRequest()
+    elif(msg['cmd'] == 'import'):
+        importRequest()
     elif(msg['cmd'] == 'newgame'):
         newGameRequest()
     elif(msg['cmd'] == 'settemp'):
@@ -349,7 +372,44 @@ def get_message(msg):
         vars.andepth = int(msg['data'])
         emit('from_server', {'cmd': 'setlabelanotedepth', 'data': msg['data']})
         settingschanged()
-
+    # Format - Trim incomplete sentences
+    elif(msg['cmd'] == 'frmttriminc'):
+        if('frmttriminc' in vars.formatoptns):
+            vars.formatoptns["frmttriminc"] = msg['data']
+        settingschanged()
+    elif(msg['cmd'] == 'frmtrmblln'):
+        if('frmtrmblln' in vars.formatoptns):
+            vars.formatoptns["frmtrmblln"] = msg['data']
+        settingschanged()
+    elif(msg['cmd'] == 'frmtrmspch'):
+        if('frmtrmspch' in vars.formatoptns):
+            vars.formatoptns["frmtrmspch"] = msg['data']
+        settingschanged()
+    elif(msg['cmd'] == 'frmtadsnsp'):
+        if('frmtadsnsp' in vars.formatoptns):
+            vars.formatoptns["frmtadsnsp"] = msg['data']
+        settingschanged()
+    elif(msg['cmd'] == 'importselect'):
+        vars.importnum = int(msg["data"].replace("import", ""))
+    elif(msg['cmd'] == 'importcancel'):
+        emit('from_server', {'cmd': 'popupshow', 'data': False})
+        vars.importjs  = {}
+    elif(msg['cmd'] == 'importaccept'):
+        emit('from_server', {'cmd': 'popupshow', 'data': False})
+        importgame()
+    elif(msg['cmd'] == 'wi'):
+        togglewimode()
+    elif(msg['cmd'] == 'wiinit'):
+        if(int(msg['data']) < len(vars.worldinfo)):
+            vars.worldinfo[msg['data']]["init"] = True
+            addwiitem()
+    elif(msg['cmd'] == 'widelete'):
+        deletewi(msg['data'])
+    elif(msg['cmd'] == 'sendwilist'):
+        commitwi(msg['data'])
+    elif(msg['cmd'] == 'aidgimport'):
+        importAidgRequest(msg['data'])
+    
 #==================================================================#
 #   
 #==================================================================#
@@ -368,6 +428,13 @@ def sendsettings():
     else:
         for set in gensettings.gensettingsik:
             emit('from_server', {'cmd': 'addsetting', 'data': set})
+    
+    # Send formatting options
+    for frm in gensettings.formatcontrols:
+        emit('from_server', {'cmd': 'addformat', 'data': frm})
+        # Add format key to vars if it wasn't loaded with client.settings
+        if(not frm["id"] in vars.formatoptns):
+            vars.formatoptns[frm["id"]] = False;
 
 #==================================================================#
 #   
@@ -375,19 +442,20 @@ def sendsettings():
 def savesettings():
      # Build json to write
     js = {}
-    js["apikey"]     = vars.apikey
-    js["andepth"]    = vars.andepth
-    js["temp"]       = vars.temp
-    js["top_p"]      = vars.top_p
-    js["rep_pen"]    = vars.rep_pen
-    js["genamt"]     = vars.genamt
-    js["max_length"] = vars.max_length
-    js["ikgen"]      = vars.ikgen
+    js["apikey"]      = vars.apikey
+    js["andepth"]     = vars.andepth
+    js["temp"]        = vars.temp
+    js["top_p"]       = vars.top_p
+    js["rep_pen"]     = vars.rep_pen
+    js["genamt"]      = vars.genamt
+    js["max_length"]  = vars.max_length
+    js["ikgen"]       = vars.ikgen
+    js["formatoptns"] = vars.formatoptns
     
     # Write it
     file = open("client.settings", "w")
     try:
-        file.write(json.dumps(js))
+        file.write(json.dumps(js, indent=3))
     finally:
         file.close()
 
@@ -401,16 +469,24 @@ def loadsettings():
         js   = json.load(file)
         
         # Copy file contents to vars
-        #for set in js:
-        #   vars[set] = js[set]
-        vars.apikey     = js["apikey"]
-        vars.andepth    = js["andepth"]
-        vars.temp       = js["temp"]
-        vars.top_p      = js["top_p"]
-        vars.rep_pen    = js["rep_pen"]
-        vars.genamt     = js["genamt"]
-        vars.max_length = js["max_length"]
-        vars.ikgen      = js["ikgen"]
+        if("apikey" in js):
+            vars.apikey     = js["apikey"]
+        if("andepth" in js):
+            vars.andepth    = js["andepth"]
+        if("temp" in js):
+            vars.temp       = js["temp"]
+        if("top_p" in js):
+            vars.top_p      = js["top_p"]
+        if("rep_pen" in js):
+            vars.rep_pen    = js["rep_pen"]
+        if("genamt" in js):
+            vars.genamt     = js["genamt"]
+        if("max_length" in js):
+            vars.max_length = js["max_length"]
+        if("ikgen" in js):
+            vars.ikgen      = js["ikgen"]
+        if("formatoptns" in js):
+            vars.formatoptns = js["formatoptns"]
         
         file.close()
 
@@ -430,14 +506,22 @@ def actionsubmit(data):
         return
     set_aibusy(1)
     if(not vars.gamestarted):
-        vars.gamestarted = True # Start the game
-        vars.prompt = data # Save this first action as the prompt
-        emit('from_server', {'cmd': 'updatescreen', 'data': 'Please wait, generating story...'}) # Clear the startup text from game screen
+        # Start the game
+        vars.gamestarted = True
+        # Save this first action as the prompt
+        vars.prompt = data
+        # Clear the startup text from game screen
+        emit('from_server', {'cmd': 'updatescreen', 'data': 'Please wait, generating story...'})
         calcsubmit(data) # Run the first action through the generator
     else:
         # Dont append submission if it's a blank/continue action
         if(data != ""):
+            # Apply input formatting & scripts before sending to tokenizer
+            data = applyinputformatting(data)
+            # Store the result in the Action log
             vars.actions.append(data)
+        
+        # Off to the tokenizer!
         calcsubmit(data)
 
 #==================================================================#
@@ -451,6 +535,15 @@ def calcsubmit(txt):
     anoteadded   = False # In case our budget runs out before we hit A.N. depth
     actionlen    = len(vars.actions)
     
+    # Scan for WorldInfo matches
+    winfo = checkworldinfo(txt)
+    
+    # Add a newline to the end of memory
+    if(vars.memory != "" and vars.memory[-1] != "\n"):
+        mem = vars.memory + "\n"
+    else:
+        mem = vars.memory
+    
     # Build Author's Note if set
     if(vars.authornote != ""):
         anotetxt  = "\n[Author's note: "+vars.authornote+"]\n"
@@ -463,21 +556,27 @@ def calcsubmit(txt):
         prompttkns = tokenizer.encode(vars.prompt)
         lnprompt   = len(prompttkns)
         
-        memtokens = tokenizer.encode(vars.memory)
+        memtokens = tokenizer.encode(mem)
         lnmem     = len(memtokens)
+        
+        witokens  = tokenizer.encode(winfo)
+        lnwi      = len(witokens)
         
         if(anotetxt != ""):
             anotetkns = tokenizer.encode(anotetxt)
             lnanote   = len(anotetkns)
         
-        budget = vars.max_length - lnprompt - lnmem - lnanote - vars.genamt
+        budget = vars.max_length - lnprompt - lnmem - lnanote - lnwi - vars.genamt
         
         if(actionlen == 0):
             # First/Prompt action
-            subtxt = vars.memory + anotetxt + vars.prompt
-            lnsub  = lnmem + lnprompt + lnanote
+            subtxt = vars.memory + winfo + anotetxt + vars.prompt
+            lnsub  = lnmem + lnwi + lnprompt + lnanote
             
-            generate(subtxt, lnsub+1, lnsub+vars.genamt)
+            if(vars.model != "Colab"):
+                generate(subtxt, lnsub+1, lnsub+vars.genamt)
+            else:
+                sendtocolab(subtxt, lnsub+1, lnsub+vars.genamt)
         else:
             tokens     = []
             
@@ -513,16 +612,24 @@ def calcsubmit(txt):
                 else:
                     tokens = memtokens + prompttkns + tokens
             else:
-                # Prepend Memory and Prompt before action tokens
-                tokens = memtokens + prompttkns + tokens
+                # Prepend Memory, WI, and Prompt before action tokens
+                tokens = memtokens + witokens + prompttkns + tokens
             
             # Send completed bundle to generator
             ln = len(tokens)
-            generate (
-                tokenizer.decode(tokens),
-                ln+1,
-                ln+vars.genamt
-                )
+            
+            if(vars.model != "Colab"):
+                generate (
+                    tokenizer.decode(tokens),
+                    ln+1,
+                    ln+vars.genamt
+                    )
+            else:
+                sendtocolab(
+                    tokenizer.decode(tokens),
+                    ln+1,
+                    ln+vars.genamt
+                    )
     # For InferKit web API
     else:
         
@@ -530,7 +637,7 @@ def calcsubmit(txt):
         if(anotetxt != "" and actionlen < vars.andepth):
             forceanote = True
         
-        budget = vars.ikmax - len(vars.prompt) - len(anotetxt) - len(vars.memory) - 1
+        budget = vars.ikmax - len(vars.prompt) - len(anotetxt) - len(mem) - len(winfo) - 1
         subtxt = ""
         for n in range(actionlen):
             
@@ -551,19 +658,14 @@ def calcsubmit(txt):
                     subtxt = anotetxt + subtxt # A.N. len already taken from bdgt
                     anoteadded = True
         
-        # Format memory for inclusion (adding newline separator)
-        memsub = ""
-        if(vars.memory != ""):
-            memsub = vars.memory + "\n"
-        
         # Did we get to add the A.N.? If not, do it here
         if(anotetxt != ""):
             if((not anoteadded) or forceanote):
-                subtxt = memsub + anotetxt + vars.prompt + subtxt
+                subtxt = mem + winfo + anotetxt + vars.prompt + subtxt
             else:
-                subtxt = memsub + vars.prompt + subtxt
+                subtxt = mem + winfo + vars.prompt + subtxt
         else:
-            subtxt = memsub + vars.prompt + subtxt
+            subtxt = mem + winfo + vars.prompt + subtxt
         
         # Send it!
         ikrequest(subtxt)
@@ -578,6 +680,11 @@ def generate(txt, min, max):
     if(vars.hascuda and vars.usegpu):
         torch.cuda.empty_cache()
     
+    # Suppress Author's Note by flagging square brackets
+    bad_words = []
+    bad_words.append(tokenizer("[", add_prefix_space=True).input_ids)
+    bad_words.append(tokenizer("[", add_prefix_space=False).input_ids)
+    
     # Submit input text to generator
     genout = generator(
         txt, 
@@ -585,10 +692,17 @@ def generate(txt, min, max):
         min_length=min, 
         max_length=max,
         repetition_penalty=vars.rep_pen,
-        temperature=vars.temp
+        top_p=vars.top_p,
+        temperature=vars.temp,
+        bad_words_ids=bad_words
         )[0]["generated_text"]
     print("{0}{1}{2}".format(colors.CYAN, genout, colors.END))
-    vars.actions.append(getnewcontent(genout))
+    
+    # Format output before continuing
+    genout = applyoutputformatting(getnewcontent(genout))
+    
+    # Add formatted text to Actions array and refresh the game screen
+    vars.actions.append(genout)
     refresh_story()
     emit('from_server', {'cmd': 'texteffect', 'data': len(vars.actions)})
     
@@ -599,13 +713,63 @@ def generate(txt, min, max):
     set_aibusy(0)
 
 #==================================================================#
+#  Send transformers-style request to ngrok/colab host
+#==================================================================#
+def sendtocolab(txt, min, max):
+    # Log request to console
+    print("{0}Tokens:{1}, Txt:{2}{3}".format(colors.YELLOW, min-1, txt, colors.END))
+    
+    # Build request JSON data
+    reqdata = {
+        'text': txt,
+        'min': min,
+        'max': max,
+        'rep_pen': vars.rep_pen,
+        'temperature': vars.temp,
+        'top_p': vars.top_p
+    }
+    
+    # Create request
+    req = requests.post(
+        vars.colaburl, 
+        json = reqdata
+        )
+    
+    # Deal with the response
+    if(req.status_code == 200):
+        genout = req.json()["data"]["text"]
+        print("{0}{1}{2}".format(colors.CYAN, genout, colors.END))
+        
+        # Format output before continuing
+        genout = applyoutputformatting(getnewcontent(genout))
+        
+        # Add formatted text to Actions array and refresh the game screen
+        vars.actions.append(genout)
+        refresh_story()
+        emit('from_server', {'cmd': 'texteffect', 'data': len(vars.actions)})
+        
+        set_aibusy(0)
+    else:
+        # Send error message to web client
+        er = req.json()
+        if("error" in er):
+            code = er["error"]["extensions"]["code"]
+        elif("errors" in er):
+            code = er["errors"][0]["extensions"]["code"]
+            
+        errmsg = "Colab API Error: {0} - {1}".format(req.status_code, code)
+        emit('from_server', {'cmd': 'errmsg', 'data': errmsg})
+        set_aibusy(0)
+    
+
+#==================================================================#
 # Replaces returns and newlines with HTML breaks
 #==================================================================#
 def formatforhtml(txt):
     return txt.replace("\\r", "<br/>").replace("\\n", "<br/>").replace('\n', '<br/>').replace('\r', '<br/>')
 
 #==================================================================#
-#  Strips submitted text from the text returned by the AI
+# Strips submitted text from the text returned by the AI
 #==================================================================#
 def getnewcontent(txt):
     ln = len(vars.actions)
@@ -614,7 +778,41 @@ def getnewcontent(txt):
     else:
         delim = vars.actions[-1]
     
-    return (txt.split(delim)[-1])
+    # Fix issue with tokenizer replacing space+period with period
+    delim = delim.replace(" .", ".")
+    
+    split = txt.split(delim)
+    
+    return (split[-1])
+
+#==================================================================#
+# Applies chosen formatting options to text submitted to AI
+#==================================================================#
+def applyinputformatting(txt):
+    # Add sentence spacing
+    if(vars.formatoptns["frmtadsnsp"]):
+        txt = utils.addsentencespacing(txt, vars)
+    
+    return txt
+
+#==================================================================#
+# Applies chosen formatting options to text returned from AI
+#==================================================================#
+def applyoutputformatting(txt):
+    # Use standard quotes and apostrophes
+    txt = utils.fixquotes(txt)
+    
+    # Trim incomplete sentences
+    if(vars.formatoptns["frmttriminc"]):
+        txt = utils.trimincompletesentence(txt)
+    # Replace blank lines
+    if(vars.formatoptns["frmtrmblln"]):
+        txt = utils.replaceblanklines(txt)
+    # Remove special characters
+    if(vars.formatoptns["frmtrmspch"]):
+        txt = utils.removespecialchars(txt)
+    
+    return txt
 
 #==================================================================#
 # Sends the current story content to the Game Screen
@@ -631,6 +829,9 @@ def refresh_story():
 # Sends the current generator settings to the Game Menu
 #==================================================================#
 def refresh_settings():
+    # Suppress toggle change events while loading state
+    emit('from_server', {'cmd': 'allowtoggle', 'data': False})
+    
     if(vars.model != "InferKit"):
         emit('from_server', {'cmd': 'updatetemp', 'data': vars.temp})
         emit('from_server', {'cmd': 'updatetopp', 'data': vars.top_p})
@@ -643,6 +844,14 @@ def refresh_settings():
         emit('from_server', {'cmd': 'updateikgen', 'data': vars.ikgen})
     
     emit('from_server', {'cmd': 'updateanotedepth', 'data': vars.andepth})
+    
+    emit('from_server', {'cmd': 'updatefrmttriminc', 'data': vars.formatoptns["frmttriminc"]})
+    emit('from_server', {'cmd': 'updatefrmtrmblln', 'data': vars.formatoptns["frmtrmblln"]})
+    emit('from_server', {'cmd': 'updatefrmtrmspch', 'data': vars.formatoptns["frmtrmspch"]})
+    emit('from_server', {'cmd': 'updatefrmtadsnsp', 'data': vars.formatoptns["frmtadsnsp"]})
+    
+    # Allow toggle events again
+    emit('from_server', {'cmd': 'allowtoggle', 'data': True})
 
 #==================================================================#
 #  Sets the logical and display states for the AI Busy condition
@@ -708,6 +917,124 @@ def togglememorymode():
     elif(vars.mode == "memory"):
         vars.mode = "play"
         emit('from_server', {'cmd': 'memmode', 'data': 'false'})
+
+#==================================================================#
+#   Toggles the game mode for WI editing and sends UI commands
+#==================================================================#
+def togglewimode():
+    if(vars.mode == "play"):
+        vars.mode = "wi"
+        emit('from_server', {'cmd': 'wimode', 'data': 'true'})
+    elif(vars.mode == "wi"):
+        # Commit WI fields first
+        requestwi()
+        # Then set UI state back to Play
+        vars.mode = "play"
+        emit('from_server', {'cmd': 'wimode', 'data': 'false'})
+
+#==================================================================#
+#   
+#==================================================================#
+def addwiitem():
+    ob = {"key": "", "content": "", "num": len(vars.worldinfo), "init": False}
+    vars.worldinfo.append(ob);
+    emit('from_server', {'cmd': 'addwiitem', 'data': ob})
+
+#==================================================================#
+#   
+#==================================================================#
+def sendwi():
+    # Cache len of WI
+    ln = len(vars.worldinfo)
+    
+    # Clear contents of WI container
+    emit('from_server', {'cmd': 'clearwi', 'data': ''})
+    
+    # If there are no WI entries, send an empty WI object
+    if(ln == 0):
+        addwiitem()
+    else:
+        # Send contents of WI array
+        for wi in vars.worldinfo:
+            ob = wi
+            emit('from_server', {'cmd': 'addwiitem', 'data': ob})
+        # Make sure last WI item is uninitialized
+        if(vars.worldinfo[-1]["init"]):
+            addwiitem()
+
+#==================================================================#
+#  Request current contents of all WI HTML elements
+#==================================================================#
+def requestwi():
+    list = []
+    for wi in vars.worldinfo:
+        list.append(wi["num"])
+    emit('from_server', {'cmd': 'requestwiitem', 'data': list})
+
+#==================================================================#
+#  Renumber WI items consecutively
+#==================================================================#
+def organizewi():
+    if(len(vars.worldinfo) > 0):
+        count = 0
+        for wi in vars.worldinfo:
+            wi["num"] = count
+            count += 1
+        
+
+#==================================================================#
+#  Extract object from server and send it to WI objects
+#==================================================================#
+def commitwi(ar):
+    for ob in ar:
+        vars.worldinfo[ob["num"]]["key"]     = ob["key"]
+        vars.worldinfo[ob["num"]]["content"] = ob["content"]
+    # Was this a deletion request? If so, remove the requested index
+    if(vars.deletewi >= 0):
+        del vars.worldinfo[vars.deletewi]
+        organizewi()
+        # Send the new WI array structure
+        sendwi()
+        # And reset deletewi index
+        vars.deletewi = -1
+
+#==================================================================#
+#  
+#==================================================================#
+def deletewi(num):
+    if(num < len(vars.worldinfo)):
+        # Store index of deletion request
+        vars.deletewi = num
+        # Get contents of WI HTML inputs
+        requestwi()
+
+#==================================================================#
+#  Look for WI keys in text to generator
+#==================================================================#
+def checkworldinfo(txt):
+    # Dont go any further if WI is empty
+    if(len(vars.worldinfo) == 0):
+        return
+
+    # Join submitted text to last action
+    if(len(vars.actions) > 0):
+        txt = vars.actions[-1] + txt
+    
+    # Scan text for matches on WI keys
+    wimem = ""
+    for wi in vars.worldinfo:
+        if(wi["key"] != ""):
+            # Split comma-separated keys
+            keys = wi["key"].split(",")
+            for k in keys:
+                # Remove leading/trailing spaces
+                ky = k.strip()
+                if ky in txt:
+                    wimem = wimem + wi["content"] + "\n"
+                    break
+    
+    return wimem
+    
 
 #==================================================================#
 #  Commit changes to Memory storage
@@ -789,6 +1116,8 @@ def exitModes():
         emit('from_server', {'cmd': 'editmode', 'data': 'false'})
     elif(vars.mode == "memory"):
         emit('from_server', {'cmd': 'memmode', 'data': 'false'})
+    elif(vars.mode == "wi"):
+        emit('from_server', {'cmd': 'wimode', 'data': 'false'})
     vars.mode = "play"
 
 #==================================================================#
@@ -811,11 +1140,20 @@ def saveRequest():
         js["memory"]      = vars.memory
         js["authorsnote"] = vars.authornote
         js["actions"]     = vars.actions
+        js["worldinfo"]   = []
+        
+        # Extract only the important bits of WI
+        for wi in vars.worldinfo:
+            if(wi["key"] != ""):
+                js["worldinfo"].append({
+                    "key": wi["key"],
+                    "content": wi["content"]
+                })
         
         # Write it
         file = open(savpath, "w")
         try:
-            file.write(json.dumps(js))
+            file.write(json.dumps(js, indent=3))
         finally:
             file.close()
 
@@ -838,6 +1176,7 @@ def loadRequest():
         vars.prompt      = js["prompt"]
         vars.memory      = js["memory"]
         vars.actions     = js["actions"]
+        vars.worldinfo   = []
         
         # Try not to break older save files
         if("authorsnote" in js):
@@ -845,9 +1184,161 @@ def loadRequest():
         else:
             vars.authornote = ""
         
+        if("worldinfo" in js):
+            num = 0
+            for wi in js["worldinfo"]:
+                vars.worldinfo.append({
+                    "key": wi["key"],
+                    "content": wi["content"],
+                    "num": num,
+                    "init": True
+                })
+                num += 1
+        
         file.close()
         
         # Refresh game screen
+        sendwi()
+        refresh_story()
+        emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
+
+#==================================================================#
+# Import an AIDungon game exported with Mimi's tool
+#==================================================================#
+def importRequest():
+    importpath = fileops.getloadpath(vars.savedir, "Select AID CAT File", [("Json", "*.json")])
+    
+    if(importpath):
+        # Leave Edit/Memory mode before continuing
+        exitModes()
+        
+        # Read file contents into JSON object
+        file = open(importpath, "rb")
+        vars.importjs = json.load(file)
+        
+        if type(vars.importjs) is dict and "stories" in vars.importjs:
+            vars.importjs = vars.importjs["stories"]
+        
+        # Clear Popup Contents
+        emit('from_server', {'cmd': 'clearpopup', 'data': ''})
+        
+        # Initialize vars
+        num = 0
+        vars.importnum = -1
+        
+        # Get list of stories
+        for story in vars.importjs:
+            ob = {}
+            ob["num"]   = num
+            if(story["title"] != "" and story["title"] != None):
+                ob["title"] = story["title"]
+            else:
+                ob["title"] = "(No Title)"
+            if(story["description"] != "" and story["description"] != None):
+                ob["descr"] = story["description"]
+            else:
+                ob["descr"] = "(No Description)"
+            if("actions" in story):
+                ob["acts"]  = len(story["actions"])
+            elif("actionWindow" in story):
+                ob["acts"]  = len(story["actionWindow"])
+            emit('from_server', {'cmd': 'addimportline', 'data': ob})
+            num += 1
+        
+        # Show Popup
+        emit('from_server', {'cmd': 'popupshow', 'data': True})
+
+#==================================================================#
+# Import an AIDungon game selected in popup
+#==================================================================#
+def importgame():
+    if(vars.importnum >= 0):
+        # Cache reference to selected game
+        ref = vars.importjs[vars.importnum]
+        
+        # Copy game contents to vars
+        vars.gamestarted = True
+        
+        if("actions" in ref):
+            if(len(ref["actions"]) > 0):
+                vars.prompt = ref["actions"][0]["text"]
+            else:
+                vars.prompt = ""
+        elif("actionWindow" in ref):
+            if(len(ref["actionWindow"]) > 0):
+                vars.prompt = ref["actionWindow"][0]["text"]
+            else:
+                vars.prompt = ""
+        else:
+            vars.prompt = ""
+        vars.memory      = ref["memory"]
+        vars.authornote  = ref["authorsNote"] if type(ref["authorsNote"]) is str else ""
+        vars.actions     = []
+        vars.worldinfo   = []
+        
+        # Get all actions except for prompt
+        if("actions" in ref):
+            if(len(ref["actions"]) > 1):
+                for act in ref["actions"][1:]:
+                    vars.actions.append(act["text"])
+        elif("actionWindow" in ref):
+            if(len(ref["actionWindow"]) > 1):
+                for act in ref["actionWindow"][1:]:
+                    vars.actions.append(act["text"])
+        
+        # Get just the important parts of world info
+        if(ref["worldInfo"] != None):
+            if(len(ref["worldInfo"]) > 1):
+                num = 0
+                for wi in ref["worldInfo"]:
+                    vars.worldinfo.append({
+                        "key": wi["keys"],
+                        "content": wi["entry"],
+                        "num": num,
+                        "init": True
+                    })
+                    num += 1
+        
+        # Clear import data
+        vars.importjs = {}
+        
+        # Refresh game screen
+        sendwi()
+        refresh_story()
+        emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
+
+#==================================================================#
+# Import an aidg.club prompt and start a new game with it.
+#==================================================================#
+def importAidgRequest(id):    
+    exitModes()
+    
+    urlformat = "https://prompts.aidg.club/api/"
+    req = requests.get(urlformat+id)
+
+    if(req.status_code == 200):
+        js = req.json()
+        
+        # Import game state
+        vars.gamestarted = True
+        vars.prompt      = js["promptContent"]
+        vars.memory      = js["memory"]
+        vars.authornote  = js["authorsNote"]
+        vars.actions     = []
+        vars.worldinfo   = []
+        
+        num = 0
+        for wi in js["worldInfos"]:
+            vars.worldinfo.append({
+                "key": wi["keys"],
+                "content": wi["entry"],
+                "num": num,
+                "init": True
+            })
+            num += 1
+        
+        # Refresh game screen
+        sendwi()
         refresh_story()
         emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
 
@@ -872,8 +1363,10 @@ def newGameRequest():
         vars.actions     = []
         vars.savedir     = getcwd()+"\stories"
         vars.authornote  = ""
+        vars.worldinfo   = []
         
         # Refresh game screen
+        sendwi()
         setStartState()
 
 
