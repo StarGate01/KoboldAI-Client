@@ -281,7 +281,7 @@ def index():
 @socketio.on('connect')
 def do_connect():
     print("{0}Client connected!{1}".format(colors.GREEN, colors.END))
-    emit('from_server', {'cmd': 'connected'})
+    socketio.emit('from_server', {'cmd': 'connected'})
     if(not vars.gamestarted):
         setStartState()
         sendsettings()
@@ -296,15 +296,15 @@ def do_connect():
         sendwi()
         if(vars.mode == "play"):
             if(not vars.aibusy):
-                emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
+                socketio.emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
             else:
-                emit('from_server', {'cmd': 'setgamestate', 'data': 'wait'})
+                socketio.emit('from_server', {'cmd': 'setgamestate', 'data': 'wait'})
         elif(vars.mode == "edit"):
-            emit('from_server', {'cmd': 'editmode', 'data': 'true'})
+            socketio.emit('from_server', {'cmd': 'editmode', 'data': 'true'})
         elif(vars.mode == "memory"):
-            emit('from_server', {'cmd': 'memmode', 'data': 'true'})
+            socketio.emit('from_server', {'cmd': 'memmode', 'data': 'true'})
         elif(vars.mode == "wi"):
-            emit('from_server', {'cmd': 'wimode', 'data': 'true'})
+            socketio.emit('from_server', {'cmd': 'wimode', 'data': 'true'})
 
 #==================================================================#
 # Event triggered when browser SocketIO sends data to the server
@@ -342,10 +342,10 @@ def get_message(msg):
     elif(msg['cmd'] == 'edit'):
         if(vars.mode == "play"):
             vars.mode = "edit"
-            emit('from_server', {'cmd': 'editmode', 'data': 'true'})
+            socketio.emit('from_server', {'cmd': 'editmode', 'data': 'true'})
         elif(vars.mode == "edit"):
             vars.mode = "play"
-            emit('from_server', {'cmd': 'editmode', 'data': 'false'})
+            socketio.emit('from_server', {'cmd': 'editmode', 'data': 'false'})
     # EditLine Action
     elif(msg['cmd'] == 'editline'):
         editrequest(int(msg['data']))
@@ -364,27 +364,27 @@ def get_message(msg):
         newGameRequest()
     elif(msg['cmd'] == 'settemp'):
         vars.temp = float(msg['data'])
-        emit('from_server', {'cmd': 'setlabeltemp', 'data': msg['data']})
+        socketio.emit('from_server', {'cmd': 'setlabeltemp', 'data': msg['data']})
         settingschanged()
     elif(msg['cmd'] == 'settopp'):
         vars.top_p = float(msg['data'])
-        emit('from_server', {'cmd': 'setlabeltopp', 'data': msg['data']})
+        socketio.emit('from_server', {'cmd': 'setlabeltopp', 'data': msg['data']})
         settingschanged()
     elif(msg['cmd'] == 'setreppen'):
         vars.rep_pen = float(msg['data'])
-        emit('from_server', {'cmd': 'setlabelreppen', 'data': msg['data']})
+        socketio.emit('from_server', {'cmd': 'setlabelreppen', 'data': msg['data']})
         settingschanged()
     elif(msg['cmd'] == 'setoutput'):
         vars.genamt = int(msg['data'])
-        emit('from_server', {'cmd': 'setlabeloutput', 'data': msg['data']})
+        socketio.emit('from_server', {'cmd': 'setlabeloutput', 'data': msg['data']})
         settingschanged()
     elif(msg['cmd'] == 'settknmax'):
         vars.max_length = int(msg['data'])
-        emit('from_server', {'cmd': 'setlabeltknmax', 'data': msg['data']})
+        socketio.emit('from_server', {'cmd': 'setlabeltknmax', 'data': msg['data']})
         settingschanged()
     elif(msg['cmd'] == 'setikgen'):
         vars.ikgen = int(msg['data'])
-        emit('from_server', {'cmd': 'setlabelikgen', 'data': msg['data']})
+        socketio.emit('from_server', {'cmd': 'setlabelikgen', 'data': msg['data']})
         settingschanged()
     # Author's Note field update
     elif(msg['cmd'] == 'anote'):
@@ -392,7 +392,7 @@ def get_message(msg):
     # Author's Note depth update
     elif(msg['cmd'] == 'anotedepth'):
         vars.andepth = int(msg['data'])
-        emit('from_server', {'cmd': 'setlabelanotedepth', 'data': msg['data']})
+        socketio.emit('from_server', {'cmd': 'setlabelanotedepth', 'data': msg['data']})
         settingschanged()
     # Format - Trim incomplete sentences
     elif(msg['cmd'] == 'frmttriminc'):
@@ -414,10 +414,10 @@ def get_message(msg):
     elif(msg['cmd'] == 'importselect'):
         vars.importnum = int(msg["data"].replace("import", ""))
     elif(msg['cmd'] == 'importcancel'):
-        emit('from_server', {'cmd': 'popupshow', 'data': False})
+        socketio.emit('from_server', {'cmd': 'popupshow', 'data': False})
         vars.importjs  = {}
     elif(msg['cmd'] == 'importaccept'):
-        emit('from_server', {'cmd': 'popupshow', 'data': False})
+        socketio.emit('from_server', {'cmd': 'popupshow', 'data': False})
         importgame()
     elif(msg['cmd'] == 'wi'):
         togglewimode()
@@ -436,8 +436,8 @@ def get_message(msg):
 #   
 #==================================================================#
 def setStartState():
-    emit('from_server', {'cmd': 'updatescreen', 'data': '<span>Welcome to <span class="color_cyan">KoboldAI Client</span>! You are running <span class="color_green">'+vars.model+'</span>.<br/>Please load a game or enter a prompt below to begin!</span>'})
-    emit('from_server', {'cmd': 'setgamestate', 'data': 'start'})
+    socketio.emit('from_server', {'cmd': 'updatescreen', 'data': '<span>Welcome to <span class="color_cyan">KoboldAI Client</span>! You are running <span class="color_green">'+vars.model+'</span>.<br/>Please load a game or enter a prompt below to begin!</span>'})
+    socketio.emit('from_server', {'cmd': 'setgamestate', 'data': 'start'})
 
 #==================================================================#
 #   
@@ -446,14 +446,14 @@ def sendsettings():
     # Send settings for selected AI type
     if(vars.model != "InferKit"):
         for set in gensettings.gensettingstf:
-            emit('from_server', {'cmd': 'addsetting', 'data': set})
+            socketio.emit('from_server', {'cmd': 'addsetting', 'data': set})
     else:
         for set in gensettings.gensettingsik:
-            emit('from_server', {'cmd': 'addsetting', 'data': set})
+            socketio.emit('from_server', {'cmd': 'addsetting', 'data': set})
     
     # Send formatting options
     for frm in gensettings.formatcontrols:
-        emit('from_server', {'cmd': 'addformat', 'data': frm})
+        socketio.emit('from_server', {'cmd': 'addformat', 'data': frm})
         # Add format key to vars if it wasn't loaded with client.settings
         if(not frm["id"] in vars.formatoptns):
             vars.formatoptns[frm["id"]] = False;
@@ -539,7 +539,7 @@ def actionsubmit(data):
         # Save this first action as the prompt
         vars.prompt = data
         # Clear the startup text from game screen
-        emit('from_server', {'cmd': 'updatescreen', 'data': 'Please wait, generating story...'})
+        socketio.emit('from_server', {'cmd': 'updatescreen', 'data': 'Please wait, generating story...'})
         
         calcsubmit(data) # Run the first action through the generator
     else:
@@ -733,7 +733,7 @@ def generate(txt, min, max):
     # Add formatted text to Actions array and refresh the game screen
     vars.actions.append(genout)
     refresh_story()
-    emit('from_server', {'cmd': 'texteffect', 'data': len(vars.actions)})
+    socketio.emit('from_server', {'cmd': 'texteffect', 'data': len(vars.actions)})
     
     # Clear CUDA cache again if using GPU
     if(vars.hascuda and vars.usegpu):
@@ -778,13 +778,13 @@ def sendtocolab(txt, min, max):
         # Add formatted text to Actions array and refresh the game screen
         vars.actions.append(genout)
         refresh_story()
-        emit('from_server', {'cmd': 'texteffect', 'data': len(vars.actions)})
+        socketio.emit('from_server', {'cmd': 'texteffect', 'data': len(vars.actions)})
         
         set_aibusy(0)
     else:
         errmsg = "Colab API Error: Failed to get a reply from the server. Please check the colab console."
         print("{0}{1}{2}".format(colors.RED, errmsg, colors.END))
-        emit('from_server', {'cmd': 'errmsg', 'data': errmsg})
+        socketio.emit('from_server', {'cmd': 'errmsg', 'data': errmsg})
         set_aibusy(0)
     
 
@@ -850,35 +850,35 @@ def refresh_story():
     for item in vars.actions:
         txt = txt + '<chunk n="'+str(i)+'" id="n'+str(i)+'">'+item+'</chunk>'
         i += 1
-    emit('from_server', {'cmd': 'updatescreen', 'data': formatforhtml(txt)})
+    socketio.emit('from_server', {'cmd': 'updatescreen', 'data': formatforhtml(txt)})
 
 #==================================================================#
 # Sends the current generator settings to the Game Menu
 #==================================================================#
 def refresh_settings():
     # Suppress toggle change events while loading state
-    emit('from_server', {'cmd': 'allowtoggle', 'data': False})
+    socketio.emit('from_server', {'cmd': 'allowtoggle', 'data': False})
     
     if(vars.model != "InferKit"):
-        emit('from_server', {'cmd': 'updatetemp', 'data': vars.temp})
-        emit('from_server', {'cmd': 'updatetopp', 'data': vars.top_p})
-        emit('from_server', {'cmd': 'updatereppen', 'data': vars.rep_pen})
-        emit('from_server', {'cmd': 'updateoutlen', 'data': vars.genamt})
-        emit('from_server', {'cmd': 'updatetknmax', 'data': vars.max_length})
+        socketio.emit('from_server', {'cmd': 'updatetemp', 'data': vars.temp})
+        socketio.emit('from_server', {'cmd': 'updatetopp', 'data': vars.top_p})
+        socketio.emit('from_server', {'cmd': 'updatereppen', 'data': vars.rep_pen})
+        socketio.emit('from_server', {'cmd': 'updateoutlen', 'data': vars.genamt})
+        socketio.emit('from_server', {'cmd': 'updatetknmax', 'data': vars.max_length})
     else:
-        emit('from_server', {'cmd': 'updatetemp', 'data': vars.temp})
-        emit('from_server', {'cmd': 'updatetopp', 'data': vars.top_p})
-        emit('from_server', {'cmd': 'updateikgen', 'data': vars.ikgen})
+        socketio.emit('from_server', {'cmd': 'updatetemp', 'data': vars.temp})
+        socketio.emit('from_server', {'cmd': 'updatetopp', 'data': vars.top_p})
+        socketio.emit('from_server', {'cmd': 'updateikgen', 'data': vars.ikgen})
     
-    emit('from_server', {'cmd': 'updateanotedepth', 'data': vars.andepth})
+    socketio.emit('from_server', {'cmd': 'updateanotedepth', 'data': vars.andepth})
     
-    emit('from_server', {'cmd': 'updatefrmttriminc', 'data': vars.formatoptns["frmttriminc"]})
-    emit('from_server', {'cmd': 'updatefrmtrmblln', 'data': vars.formatoptns["frmtrmblln"]})
-    emit('from_server', {'cmd': 'updatefrmtrmspch', 'data': vars.formatoptns["frmtrmspch"]})
-    emit('from_server', {'cmd': 'updatefrmtadsnsp', 'data': vars.formatoptns["frmtadsnsp"]})
+    socketio.emit('from_server', {'cmd': 'updatefrmttriminc', 'data': vars.formatoptns["frmttriminc"]})
+    socketio.emit('from_server', {'cmd': 'updatefrmtrmblln', 'data': vars.formatoptns["frmtrmblln"]})
+    socketio.emit('from_server', {'cmd': 'updatefrmtrmspch', 'data': vars.formatoptns["frmtrmspch"]})
+    socketio.emit('from_server', {'cmd': 'updatefrmtadsnsp', 'data': vars.formatoptns["frmtadsnsp"]})
     
     # Allow toggle events again
-    emit('from_server', {'cmd': 'allowtoggle', 'data': True})
+    socketio.emit('from_server', {'cmd': 'allowtoggle', 'data': True})
 
 #==================================================================#
 #  Sets the logical and display states for the AI Busy condition
@@ -886,10 +886,10 @@ def refresh_settings():
 def set_aibusy(state):
     if(state):
         vars.aibusy = True
-        emit('from_server', {'cmd': 'setgamestate', 'data': 'wait'})
+        socketio.emit('from_server', {'cmd': 'setgamestate', 'data': 'wait'})
     else:
         vars.aibusy = False
-        emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
+        socketio.emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
 
 #==================================================================#
 # 
@@ -901,8 +901,8 @@ def editrequest(n):
         txt = vars.actions[n-1]
     
     vars.editln = n
-    emit('from_server', {'cmd': 'setinputtext', 'data': txt})
-    emit('from_server', {'cmd': 'enablesubmit', 'data': ''})
+    socketio.emit('from_server', {'cmd': 'setinputtext', 'data': txt})
+    socketio.emit('from_server', {'cmd': 'enablesubmit', 'data': ''})
 
 #==================================================================#
 # 
@@ -915,8 +915,8 @@ def editsubmit(data):
     
     vars.mode = "play"
     refresh_story()
-    emit('from_server', {'cmd': 'texteffect', 'data': vars.editln})
-    emit('from_server', {'cmd': 'editmode', 'data': 'false'})
+    socketio.emit('from_server', {'cmd': 'texteffect', 'data': vars.editln})
+    socketio.emit('from_server', {'cmd': 'editmode', 'data': 'false'})
 
 #==================================================================#
 #  
@@ -930,7 +930,7 @@ def deleterequest():
         del vars.actions[vars.editln-1]
         vars.mode = "play"
         refresh_story()
-        emit('from_server', {'cmd': 'editmode', 'data': 'false'})
+        socketio.emit('from_server', {'cmd': 'editmode', 'data': 'false'})
 
 #==================================================================#
 #   Toggles the game mode for memory editing and sends UI commands
@@ -938,12 +938,12 @@ def deleterequest():
 def togglememorymode():
     if(vars.mode == "play"):
         vars.mode = "memory"
-        emit('from_server', {'cmd': 'memmode', 'data': 'true'})
-        emit('from_server', {'cmd': 'setinputtext', 'data': vars.memory})
-        emit('from_server', {'cmd': 'setanote', 'data': vars.authornote})
+        socketio.emit('from_server', {'cmd': 'memmode', 'data': 'true'})
+        socketio.emit('from_server', {'cmd': 'setinputtext', 'data': vars.memory})
+        socketio.emit('from_server', {'cmd': 'setanote', 'data': vars.authornote})
     elif(vars.mode == "memory"):
         vars.mode = "play"
-        emit('from_server', {'cmd': 'memmode', 'data': 'false'})
+        socketio.emit('from_server', {'cmd': 'memmode', 'data': 'false'})
 
 #==================================================================#
 #   Toggles the game mode for WI editing and sends UI commands
@@ -951,13 +951,13 @@ def togglememorymode():
 def togglewimode():
     if(vars.mode == "play"):
         vars.mode = "wi"
-        emit('from_server', {'cmd': 'wimode', 'data': 'true'})
+        socketio.emit('from_server', {'cmd': 'wimode', 'data': 'true'})
     elif(vars.mode == "wi"):
         # Commit WI fields first
         requestwi()
         # Then set UI state back to Play
         vars.mode = "play"
-        emit('from_server', {'cmd': 'wimode', 'data': 'false'})
+        socketio.emit('from_server', {'cmd': 'wimode', 'data': 'false'})
 
 #==================================================================#
 #   
@@ -965,7 +965,7 @@ def togglewimode():
 def addwiitem():
     ob = {"key": "", "content": "", "num": len(vars.worldinfo), "init": False}
     vars.worldinfo.append(ob);
-    emit('from_server', {'cmd': 'addwiitem', 'data': ob})
+    socketio.emit('from_server', {'cmd': 'addwiitem', 'data': ob})
 
 #==================================================================#
 #   
@@ -975,7 +975,7 @@ def sendwi():
     ln = len(vars.worldinfo)
     
     # Clear contents of WI container
-    emit('from_server', {'cmd': 'clearwi', 'data': ''})
+    socketio.emit('from_server', {'cmd': 'clearwi', 'data': ''})
     
     # If there are no WI entries, send an empty WI object
     if(ln == 0):
@@ -984,7 +984,7 @@ def sendwi():
         # Send contents of WI array
         for wi in vars.worldinfo:
             ob = wi
-            emit('from_server', {'cmd': 'addwiitem', 'data': ob})
+            socketio.emit('from_server', {'cmd': 'addwiitem', 'data': ob})
         # Make sure last WI item is uninitialized
         if(vars.worldinfo[-1]["init"]):
             addwiitem()
@@ -996,7 +996,7 @@ def requestwi():
     list = []
     for wi in vars.worldinfo:
         list.append(wi["num"])
-    emit('from_server', {'cmd': 'requestwiitem', 'data': list})
+    socketio.emit('from_server', {'cmd': 'requestwiitem', 'data': list})
 
 #==================================================================#
 #  Renumber WI items consecutively
@@ -1087,10 +1087,10 @@ def memsubmit(data):
     # For now just send it to storage
     vars.memory = data
     vars.mode = "play"
-    emit('from_server', {'cmd': 'memmode', 'data': 'false'})
+    socketio.emit('from_server', {'cmd': 'memmode', 'data': 'false'})
     
     # Ask for contents of Author's Note field
-    emit('from_server', {'cmd': 'getanote', 'data': ''})
+    socketio.emit('from_server', {'cmd': 'getanote', 'data': ''})
 
 #==================================================================#
 #  Commit changes to Author's Note
@@ -1136,7 +1136,7 @@ def ikrequest(txt):
         print("{0}{1}{2}".format(colors.CYAN, genout, colors.END))
         vars.actions.append(genout)
         refresh_story()
-        emit('from_server', {'cmd': 'texteffect', 'data': len(vars.actions)})
+        socketio.emit('from_server', {'cmd': 'texteffect', 'data': len(vars.actions)})
         
         set_aibusy(0)
     else:
@@ -1148,7 +1148,7 @@ def ikrequest(txt):
             code = er["errors"][0]["extensions"]["code"]
             
         errmsg = "InferKit API Error: {0} - {1}".format(req.status_code, code)
-        emit('from_server', {'cmd': 'errmsg', 'data': errmsg})
+        socketio.emit('from_server', {'cmd': 'errmsg', 'data': errmsg})
         set_aibusy(0)
 
 #==================================================================#
@@ -1156,11 +1156,11 @@ def ikrequest(txt):
 #==================================================================#
 def exitModes():
     if(vars.mode == "edit"):
-        emit('from_server', {'cmd': 'editmode', 'data': 'false'})
+        socketio.emit('from_server', {'cmd': 'editmode', 'data': 'false'})
     elif(vars.mode == "memory"):
-        emit('from_server', {'cmd': 'memmode', 'data': 'false'})
+        socketio.emit('from_server', {'cmd': 'memmode', 'data': 'false'})
     elif(vars.mode == "wi"):
-        emit('from_server', {'cmd': 'wimode', 'data': 'false'})
+        socketio.emit('from_server', {'cmd': 'wimode', 'data': 'false'})
     vars.mode = "play"
 
 #==================================================================#
@@ -1245,7 +1245,7 @@ def loadRequest():
         # Refresh game screen
         sendwi()
         refresh_story()
-        emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
+        socketio.emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
 
 #==================================================================#
 # Import an AIDungon game exported with Mimi's tool
@@ -1266,7 +1266,7 @@ def importRequest():
             vars.importjs = vars.importjs["stories"]
         
         # Clear Popup Contents
-        emit('from_server', {'cmd': 'clearpopup', 'data': ''})
+        socketio.emit('from_server', {'cmd': 'clearpopup', 'data': ''})
         
         # Initialize vars
         num = 0
@@ -1288,11 +1288,11 @@ def importRequest():
                 ob["acts"]  = len(story["actions"])
             elif("actionWindow" in story):
                 ob["acts"]  = len(story["actionWindow"])
-            emit('from_server', {'cmd': 'addimportline', 'data': ob})
+            socketio.emit('from_server', {'cmd': 'addimportline', 'data': ob})
             num += 1
         
         # Show Popup
-        emit('from_server', {'cmd': 'popupshow', 'data': True})
+        socketio.emit('from_server', {'cmd': 'popupshow', 'data': True})
 
 #==================================================================#
 # Import an AIDungon game selected in popup
@@ -1354,7 +1354,7 @@ def importgame():
         # Refresh game screen
         sendwi()
         refresh_story()
-        emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
+        socketio.emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
 
 #==================================================================#
 # Import an aidg.club prompt and start a new game with it.
@@ -1391,7 +1391,7 @@ def importAidgRequest(id):
         # Refresh game screen
         sendwi()
         refresh_story()
-        emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
+        socketio.emit('from_server', {'cmd': 'setgamestate', 'data': 'ready'})
 
 #==================================================================#
 #  Starts a new story
