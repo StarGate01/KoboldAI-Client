@@ -6,8 +6,6 @@
 
 # External packages
 from os import path, getcwd
-import tkinter as tk
-from tkinter import messagebox
 import json
 import requests
 
