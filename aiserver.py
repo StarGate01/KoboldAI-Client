@@ -651,7 +651,7 @@ def actionsubmit(data):
         vars.prompt = data
         if(not vars.noai):
             # Clear the startup text from game screen
-            sokcetio.emit('from_server', {'cmd': 'updatescreen', 'data': 'Please wait, generating story...'})
+            socketio.emit('from_server', {'cmd': 'updatescreen', 'data': 'Please wait, generating story...'})
             calcsubmit(data) # Run the first action through the generator
         else:
             refresh_story()
