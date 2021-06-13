@@ -8,6 +8,7 @@
 from os import path, getcwd
 import json
 import requests
+import html
 
 # KoboldAI
 import fileops
@@ -836,6 +837,7 @@ def calcsubmit(txt):
             budget = vars.ikmax - len(anotetxt) - len(mem) - len(winfo) - 1
             
         subtxt = ""
+        prompt = vars.prompt
         for n in range(actionlen):
             
             if(budget <= 0):
@@ -852,7 +854,6 @@ def calcsubmit(txt):
             
             # If we're not using the prompt every time and there's still budget left,
             # add some prompt.
-            prompt = vars.prompt
             if(not vars.useprompt):
                 if(budget > 0):
                     prompt = vars.prompt[-budget:]
@@ -1088,12 +1089,10 @@ def applyoutputformatting(txt):
 # Sends the current story content to the Game Screen
 #==================================================================#
 def refresh_story():
-    txt = '<chunk n="0" id="n0">'+vars.prompt+'</chunk>'
-    i = 1
-    for item in vars.actions:
-        txt = txt + '<chunk n="'+str(i)+'" id="n'+str(i)+'">'+item+'</chunk>'
-        i += 1
-    socketio.emit('from_server', {'cmd': 'updatescreen', 'data': formatforhtml(txt)})
+    text_parts = ['<chunk n="0" id="n0">', html.escape(vars.prompt), '</chunk>']
+    for idx, item in enumerate(vars.actions, start=1):
+        text_parts.extend(('<chunk n="', str(idx), '" id="n', str(idx), '">', html.escape(item), '</chunk>'))
+    socketio.emit('from_server', {'cmd': 'updatescreen', 'data': formatforhtml(''.join(text_parts))})
 
 #==================================================================#
 # Sends the current generator settings to the Game Menu
